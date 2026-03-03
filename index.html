@@ -292,6 +292,7 @@ footer{background:var(--black);color:rgba(255,255,255,.45);padding:52px 32px 24p
   <a href="world.html">World</a>
   <a href="education.html">Education</a>
   <a href="resources.html">Resources</a>
+  <a href="pidgin.html">Pidgin</a>
   <a href="#newsletter" class="cta">Free Newsletter →</a>
 </nav>
 
@@ -592,7 +593,7 @@ footer{background:var(--black);color:rgba(255,255,255,.45);padding:52px 32px 24p
   <div class="nltag">★ The Ghana Hemp Brief</div>
   <h2>Stay Ahead of the Industry</h2>
   <p>Ghana's most reliable hemp and cannabis newsletter. NACOC updates, licensing alerts, legal developments, and investment intelligence — delivered free, weekly.</p>
-  <form name="newsletter" method="POST" data-netlify="true" netlify-honeypot="bot-field" style="display:flex;max-width:440px;margin:0 auto 14px;"><input type="hidden" name="form-name" value="newsletter"><p style="display:none;"><input name="bot-field"></p><input type="email" name="email" placeholder="Your email address" required style="flex:1;padding:12px 16px;font-size:13px;border:2px solid #0D0D0D;background:#fff;outline:none;"><button type="submit" style="background:#0D0D0D;color:#FCD116;border:none;padding:12px 18px;font-family:monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">Subscribe Free</button></form><p style="font-size:11px;color:#0D0D0D;font-weight:500;">Free. No spam. Contact: <a href="mailto:ghanahemp@gmail.com" style="color:#0D0D0D;font-weight:700;">ghanahemp@gmail.com</a></p>
+  <form name="newsletter" method="POST" data-netlify="true" netlify-honeypot="bot-field" style="display:flex;max-width:440px;margin:0 auto 14px;"><input type="hidden" name="form-name" value="newsletter"><p style="display:none;"><input name="bot-field"></p><input type="email" name="email" placeholder="Your email address" required style="flex:1;padding:12px 16px;font-size:13px;border:2px solid #0D0D0D;background:#fff;outline:none;"><button type="submit" style="background:#0D0D0D;color:#FCD116;border:none;padding:12px 18px;font-family:monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">Subscribe Free</button></form><p style="font-size:11px;color:#0D0D0D;font-weight:500;">Free. No spam. Contact: <a href="/cdn-cgi/l/email-protection#a9cec1c8c7c8c1ccc4d9e9cec4c8c0c587cac6c4" style="color:#0D0D0D;font-weight:700;"><span class="__cf_email__" data-cfemail="e18689808f8089848c91a1868c80888dcf828e8c">[email&#160;protected]</span></a></p>
   <div class="nlmags">
     <div class="nlmag">NACOC Licensing Document Checklist</div>
     <div class="nlmag">Act 1019 / L.I. 2475 Plain-English Guide</div>
@@ -653,7 +654,7 @@ footer{background:var(--black);color:rgba(255,255,255,.45);padding:52px 32px 24p
   </div>
 </footer>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 document.querySelector('.cta').addEventListener('click',function(e){
   e.preventDefault();document.getElementById('newsletter').scrollIntoView({behavior:'smooth'});
 });
@@ -661,9 +662,4 @@ document.querySelector('.nlform button').addEventListener('click',function(){
   const inp=document.querySelector('.nlform input');
   if(inp.value&&inp.value.includes('@')){
     inp.value='';this.textContent='✓ Subscribed!';this.style.background='#006B3F';
-    setTimeout(()=>{this.textContent='Subscribe Free';this.style.background=''},3000);
-  }else{
-    inp.style.borderColor='#CE1126';setTimeout(()=>inp.style.borderColor='',2000);
-  }
-});
-const obs=new IntersectionObserver(entries=>entries.forEa
+ 

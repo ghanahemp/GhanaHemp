@@ -1,4 +1,4 @@
-""" 
+"""
 GhanaHemp.com Auto-Publisher Bot
 =================================
 Runs daily, finds real Ghana cannabis news, writes a full article
@@ -27,12 +27,28 @@ GITHUB_REPO       = "GhanaHemp"
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 SOURCES = [
+    # Ghana Government & Official
     "https://www.ncc.gov.gh/news/",
     "https://www.mint.gov.gh/category/latest-news/",
+    "https://cannacham.org/",
+    # Ghana News
     "https://www.ghanaweb.com/GhanaHomePage/NewsArchive/cannabis",
     "https://www.graphic.com.gh/search?q=cannabis+hemp+ghana",
     "https://www.newsghana.com.gh/?s=cannabis",
-    "https://cannacham.org/",
+    "https://www.modernghana.com/search/?q=cannabis+hemp",
+    "https://www.myjoyonline.com/?s=cannabis+hemp+ghana",
+    "https://citinewsroom.com/?s=cannabis+hemp",
+    "https://3news.com/?s=cannabis",
+    # Africa & International Cannabis
+    "https://www.theafricareport.com/?s=cannabis+ghana",
+    "https://internationalcbc.com/blog/",
+    "https://cedclinic.com/category/news/",
+    "https://www.bbc.com/pidgin/topics/c404v4ekv5et",
+    "https://africacannabis.org/",
+    # Global Cannabis Business
+    "https://mjbizdaily.com/tag/africa/",
+    "https://cannabisindustryjournal.com/",
+    "https://hempindustrydaily.com/",
 ]
 
 SITE_STYLE = """
@@ -176,7 +192,13 @@ def search_for_news():
             "role": "user",
             "content": """Search for the very latest Ghana cannabis, hemp, or NACOC news from the past 7 days.
             
-Search for: "Ghana cannabis 2026" AND "Ghana hemp NACOC 2026" AND "Ghana cannabis licensing 2026"
+Search these topics for very recent news (past 7 days):
+1. "Ghana cannabis 2026" OR "Ghana hemp NACOC 2026"
+2. "Ghana cannabis licensing" OR "NACOC cannabis"
+3. "Ghana hemp programme" OR "Ghana cannabis regulatory"
+4. Check these specific outlets for Ghana cannabis coverage: modernghana.com, myjoyonline.com, citinewsroom.com, theafricareport.com, internationalcbc.com, 3news.com, graphic.com.gh
+
+Pick the single most newsworthy and recent story you find.
 
 Return a JSON object with this exact structure:
 {
@@ -217,33 +239,24 @@ def write_article(news_data):
     """Use Claude to write a full GhanaHemp-style article."""
     print("✍️  Writing article...")
     
-    prompt = f"""
-{SITE_STYLE}
+    prompt = f"""You are GhanaHemp.com editor. Write a 500-word news article in HTML.
 
-Write a full, professional news article for GhanaHemp.com based on this news:
-
-HEADLINE: {news_data.get('headline')}
+NEWS: {news_data.get('headline')}
 SUMMARY: {news_data.get('summary')}
-SOURCE: {news_data.get('source_name')} — {news_data.get('source_url')}
+SOURCE: {news_data.get('source_name')}
 CATEGORY: {news_data.get('category')}
-DATE: {news_data.get('date')}
 
-Write the article in HTML format using only these tags: <p>, <h2>, <h3>, <blockquote> with <p> and <cite> inside.
-
-Requirements:
-- 600-900 words
-- 3-4 sections with <h2> headings
-- At least one blockquote with a real official quote if available, or context quote
-- Always explain what this means for Ghanaian farmers, investors, or citizens
-- Always mention NACOC, portal.ncc.gov.gh, or L.I. 2475 where relevant
-- End with a "What This Means" section summarising implications
-- Do NOT include the legal reminder box or sources box — those are added automatically
-
-Return ONLY the HTML article body, no other text.
+Rules:
+- Use only <p>, <h2>, <h3>, <blockquote><p></p><cite></cite></blockquote> tags
+- 3 sections with h2 headings
+- Mention NACOC, L.I. 2475, portal.ncc.gov.gh where relevant
+- End with What This Means section
+- Ghana-first perspective
+- Return ONLY the HTML, nothing else
 """
     
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=2000,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -404,6 +417,8 @@ def run():
         return
     
     # Step 2: Write article
+    print("⏳ Waiting 60 seconds before writing...")
+    time.sleep(60)
     article_body = write_article(news)
     
     if not article_body:

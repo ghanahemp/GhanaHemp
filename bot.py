@@ -1,4 +1,4 @@
-"""
+""" 
 GhanaHemp.com Auto-Publisher Bot
 =================================
 Runs daily, finds real Ghana cannabis news, writes a full article

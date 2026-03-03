@@ -19,7 +19,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--cream);color:var(--
 
 /* ── UTILS ─────────────────────────────── */
 .flag{display:flex;height:5px;}
-.fr{flex:1;background:var(--red);} .fg{flex:1;background:var(--gold);} .fgr{flex:1;background:var(--green);}
+.fr{flex:1;background:var(--red);} /* removed rogue fg rule */ .fgr{flex:1;background:var(--green);}
 
 .sr{display:flex;align-items:center;gap:12px;padding-bottom:13px;border-bottom:2px solid var(--black);margin-bottom:28px;}
 .sr h2{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;font-weight:500;}
@@ -263,7 +263,7 @@ footer{background:var(--black);color:rgba(255,255,255,.45);padding:52px 32px 24p
   <div>
     <a href="#newsletter">Newsletter</a>
     <a href="https://www.ncc.gov.gh/cannabis-regulations/" target="_blank">NACOC Official</a>
-    <a href="mailto:info@ghanahemp.com">Contact</a>
+    <a href="/cdn-cgi/l/email-protection#5a33343c351a3d323b343b323f372a74393537">Contact</a>
   </div>
 </div>
 
@@ -629,17 +629,17 @@ footer{background:var(--black);color:rgba(255,255,255,.45);padding:52px 32px 24p
     </div>
     <div class="fc">
       <h5>Coverage</h5>
-      <a href="#">Africa Watch</a>
-      <a href="#">World Context</a>
-      <a href="#">Policy Analysis</a>
-      <a href="#">Free Resources</a>
-      <a href="#">Newsletter</a>
+      <a href="africa.html">Africa Watch</a>
+      <a href="world.html">World Context</a>
+      <a href="policy.html">Policy Analysis</a>
+      <a href="resources.html">Free Resources</a>
+      <a href="#newsletter">Newsletter</a>
       <a href="https://cannacham.org/" target="_blank">Cannacham →</a>
     </div>
     <div class="fc">
       <h5>GhanaHemp.com</h5>
-      <a href="#">About</a>
-      <a href="mailto:info@ghanahemp.com">Contact</a>
+      <a href="index.html">About</a>
+      <a href="/cdn-cgi/l/email-protection#11787f777e517679707f7079747c613f727e7c">Contact</a>
       <a href="#">Privacy Policy</a>
       <a href="#">Terms of Service</a>
       <a href="#">Medical Disclaimer</a>
@@ -649,17 +649,13 @@ footer{background:var(--black);color:rgba(255,255,255,.45);padding:52px 32px 24p
   <div class="fbot">
     <span>© 2026 GhanaHemp.com — All rights reserved. Not legal or medical advice. Verified sources: ncc.gov.gh · mint.gov.gh</span>
     <div>
-      <a href="#">Privacy</a><a href="#">Terms</a><a href="#">Disclaimer</a><a href="mailto:info@ghanahemp.com">Contact</a>
+      <a href="#">Privacy</a><a href="#">Terms</a><a href="#">Disclaimer</a><a href="/cdn-cgi/l/email-protection#e881868e87a88f80898689808d8598c68b8785">Contact</a>
     </div>
   </div>
 </footer>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 document.querySelector('.cta').addEventListener('click',function(e){
   e.preventDefault();document.getElementById('newsletter').scrollIntoView({behavior:'smooth'});
 });
-document.querySelector('.nlform button').addEventListener('click',function(){
-  const inp=document.querySelector('.nlform input');
-  if(inp.value&&inp.value.includes('@')){
-    inp.value='';this.textContent='✓ Subscribed!';this.style.background='#006B3F';
- 
+document.querySelector('.nlf

@@ -211,7 +211,7 @@ footer a{{color:rgba(255,255,255,.3);text-decoration:none;margin:0 8px;}}
 <div class="topbar"><span>NACOC Licensing Portal Open — portal.ncc.gov.gh · Toll-Free: 0800 307 307</span><div><a href="index.html">Home</a><a href="ghana-news.html">Ghana News</a><a href="licensing.html">Licensing</a></div></div>
 <div class="masthead"><a href="index.html" class="sn">Ghana<span>Hemp</span>.com</a></div>
 <nav><a href="index.html">Home</a><a href="ghana-news.html">Ghana News</a><a href="licensing.html">Licensing</a><a href="business.html">Business</a><a href="policy.html">Policy</a><a href="africa.html">Africa</a><a href="world.html">World</a><a href="education.html">Education</a><a href="resources.html">Resources</a><a href="index.html#newsletter" class="cta">Newsletter</a></nav>
-<div class="hero"><div class="wrap"><div class="eyebrow">{category} — {date_str}</div><h1>{title}</h1><div class="byline">GhanaHemp.com — {date_str} — {read_time} min read</div></div></div>
+<div class="hero"><div class="wrap"><div class="eyebrow">{category} — {date_str}</div><h1>{title}</h1><div class="byline">By GhanaHemp.com · Published {date_str} · <time datetime="{iso_date}">{read_time} min read</time></div></div></div>
 <div class="body"><div class="wrap">
 {toc_html}
 {body_html}
@@ -270,13 +270,14 @@ def update_news_index(filename, headline, summary, category):
     current = base64.b64decode(data['content']).decode('utf-8')
     sha = data['sha']
     date_str = datetime.datetime.now().strftime('%B %d, %Y')
+    time_str = datetime.datetime.now().strftime('%H:%M GMT')
     snip = (summary[:135] + '...') if len(summary) > 135 else summary
     card = f"""
   <div class="card" style="border:2px solid var(--green);">
     <div class="ct"><div class="cti tg"></div><div class="clbl lg">{category} — NEW</div></div>
     <h3><a href="{filename}" style="text-decoration:none;color:inherit;">{headline}</a></h3>
     <p>{snip}</p>
-    <div class="src">GhanaHemp.com — {date_str} — <a href="{filename}">Read full article</a></div>
+    <div class="src">GhanaHemp.com · {date_str} · {time_str} · <a href="{filename}">Read full article →</a></div>
   </div>
 """
     marker = '<div class="grid g2">'
@@ -296,10 +297,18 @@ def slugify(text, max_len=55):
 
 
 def today():
-    return datetime.datetime.now().strftime('%B %d, %Y')
+    return datetime.datetime.now().strftime('%B %d, %Y · %H:%M GMT')
 
 def today_iso():
-    return datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    return datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S+00:00')
+
+def today_time():
+    """Returns human-readable timestamp with time e.g. March 4, 2026 · 08:14 GMT"""
+    return datetime.datetime.now().strftime('%B %d, %Y · %H:%M GMT')
+
+def today_short():
+    """Returns short date for news cards e.g. Mar 4, 2026"""
+    return datetime.datetime.now().strftime('%b %d, %Y')
 
 def read_time(html):
     return max(3, round(len(html.split()) / 200))
@@ -309,8 +318,26 @@ def read_time(html):
 # AI HELPERS — call Claude with web search
 # ═══════════════════════════════════════════════════════
 
-def ai_search_and_write(prompt, max_tokens=4000, use_search=True):
+# ═══════════════════════════════════════════════════════
+# SPEND GUARD — prevents runaway costs
+# ═══════════════════════════════════════════════════════
+_api_calls_today = 0
+MAX_API_CALLS_PER_RUN = 8  # hard limit — prevents runaway cost
+
+def check_spend_limit():
+    """Returns True if we can make another API call."""
+    global _api_calls_today
+    _api_calls_today += 1
+    if _api_calls_today > MAX_API_CALLS_PER_RUN:
+        print(f"  ⚠️  Spend limit reached ({MAX_API_CALLS_PER_RUN} calls). Stopping to save credits.")
+        return False
+    return True
+
+
+def ai_search_and_write(prompt, max_tokens=2000, use_search=True):
     """Call Claude Sonnet with optional web search. Returns full text."""
+    if not check_spend_limit(): return ""
+    time.sleep(15)  # avoid rate limiting — 15s gap before Sonnet calls
     tools = [{"type": "web_search_20250305", "name": "web_search"}] if use_search else []
     kwargs = dict(
         model="claude-sonnet-4-20250514",
@@ -323,8 +350,10 @@ def ai_search_and_write(prompt, max_tokens=4000, use_search=True):
     return "".join(b.text for b in r.content if hasattr(b, 'text'))
 
 
-def ai_write(prompt, max_tokens=3000):
+def ai_write(prompt, max_tokens=2000):
     """Call Claude Haiku — fast writer, no search."""
+    if not check_spend_limit(): return ""
+    time.sleep(5)  # avoid rate limiting
     r = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=max_tokens,
@@ -469,7 +498,12 @@ def run_news_mode():
     print("\n📡 MODE 1: NEWS")
     raw = ai_search_and_write("""Search for the LATEST Ghana cannabis, hemp, or NACOC news from the past 7 days.
 
-Search: "Ghana cannabis 2026" AND "NACOC cannabis Ghana" AND check: modernghana.com, myjoyonline.com, citinewsroom.com, 3news.com, graphic.com.gh, theafricareport.com
+Search these sources for Ghana cannabis/hemp news:
+Ghana sources: ghanaweb.com, modernghana.com, myjoyonline.com, citinewsroom.com, 3news.com, graphic.com.gh, pulse.com.gh, dailyguidenetwork.com, businessghana.com, thebftonline.com, ghananewsagency.org, peacefmonline.com, starrfm.com.gh, ghanabusinessnews.com, thecitizen.com.gh, accramail.com, mynewsgh.com, adomonline.com, kasapafmonline.com, asaaseradio.com
+Africa sources: theafricareport.com, africanews.com, businessinsider.africa, africanbusinessmagazine.com, premiumtimesng.com, businessdayonline.com, dailymaverick.co.za, theeastafrican.co.ke, africafeeds.com
+International: reuters.com, bloomberg.com, cannabisbusinesstimes.com, mjbizdaily.com, cannabisindustryjournal.com, hempindustrydaily.com, leafly.com, forbes.com/cannabis
+
+Search queries: "Ghana cannabis 2026" OR "NACOC cannabis Ghana" OR "Ghana hemp licence" OR "Ghana cannabis NACOC" OR "Ghana industrial hemp"
 
 Find the single most important, most recent story published in the last 7 days.
 
@@ -482,7 +516,7 @@ Return ONLY this JSON (no other text):
   "source_name": "publication name",
   "category": "Policy or Licensing or Business or Legal or Health or Industry",
   "date": "date"
-}""", max_tokens=1000)
+}""", max_tokens=800)
 
     try:
         m = re.search(r'\{.*?\}', raw, re.DOTALL)
@@ -515,7 +549,7 @@ WRITING RULES:
 - Include context: reference NACOC, L.I. 2475, Act 1100, portal.ncc.gov.gh where relevant
 - End with a "What This Means" section analysing the implications for Ghana
 - Reference the source but write the article in our own original voice
-- Return ONLY the HTML body, nothing else""", max_tokens=2500)
+- Return ONLY the HTML body, nothing else""", max_tokens=2000)
 
     filename = f"article-{datetime.datetime.now().strftime('%Y-%m-%d')}-{slugify(headline)}.html"
     sources_html = f'<a href="{news.get("source_url","")}" target="_blank">{news.get("source_name","")}</a> · NACOC (ncc.gov.gh) · Ministry of Interior (mint.gov.gh)'
@@ -607,7 +641,7 @@ THIS IS ORIGINAL JOURNALISM — NOT A SUMMARY:
 - End with a clear takeaway
 - Return HTML body FIRST, then on a new line write:
 SECTIONS_JSON:
-["Section 1 Title", "Section 2 Title", "Section 3 Title", "Section 4 Title"]""", max_tokens=3500)
+["Section 1 Title", "Section 2 Title", "Section 3 Title", "Section 4 Title"]""", max_tokens=2000)
 
     body, sections = parse_sections(raw2)
     toc = build_toc(sections)
@@ -679,7 +713,7 @@ WRITING RULES:
 
 Return HTML body FIRST then:
 SECTIONS_JSON:
-["Section 1", "Section 2", "Section 3", "Section 4", "Section 5"]""", max_tokens=4000)
+["Section 1", "Section 2", "Section 3", "Section 4", "Section 5"]""", max_tokens=2000)
 
     body, sections = parse_sections(raw)
     toc = build_toc(sections)
@@ -745,7 +779,7 @@ THIS IS ORIGINAL OPINION/ANALYSIS — not a news report:
 
 Return HTML body FIRST then:
 SECTIONS_JSON:
-["Section 1", "Section 2", "Section 3", "Section 4"]""", max_tokens=3500)
+["Section 1", "Section 2", "Section 3", "Section 4"]""", max_tokens=2000)
 
     body, sections = parse_sections(raw)
     toc = build_toc(sections)
@@ -816,7 +850,7 @@ HTML TAGS — use ONLY:
 
 Return HTML body FIRST then:
 SECTIONS_JSON:
-["Section 1", "Section 2", "Section 3", "Section 4", "FAQ"]""", max_tokens=4500)
+["Section 1", "Section 2", "Section 3", "Section 4", "FAQ"]""", max_tokens=2000)
 
     body, sections = parse_sections(raw)
     toc = build_toc(sections)

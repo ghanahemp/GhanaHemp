@@ -808,6 +808,12 @@ def run():
         existing = get_existing_files()
         run_educational_mode(existing)
 
+    # Always update sitemap at end of run
+    try:
+        update_sitemap()
+    except Exception as e:
+        print(f"  ⚠️  Sitemap update failed: {e}")
+
     print("\n" + "=" * 60)
     print("📊 RESULTS:")
     for mode, ok in results:

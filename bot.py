@@ -17,15 +17,31 @@ DAILY LOGIC:
 SETUP — set these environment variables on Railway:
   ANTHROPIC_API_KEY
   GITHUB_TOKEN
+  TWITTER_API_KEY
+  TWITTER_API_SECRET
+  TWITTER_ACCESS_TOKEN
+  TWITTER_ACCESS_TOKEN_SECRET
 """
 
 import os, json, base64, datetime, requests, time, re, random
 import anthropic
+try:
+    import tweepy
+    TWEEPY_AVAILABLE = True
+except ImportError:
+    TWEEPY_AVAILABLE = False
+    print("⚠️  tweepy not installed — Twitter posting disabled. Add tweepy to requirements.txt")
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "YOUR_KEY_HERE")
 GITHUB_TOKEN      = os.environ.get("GITHUB_TOKEN", "YOUR_TOKEN_HERE")
 GITHUB_USERNAME   = "ghanahemp"
 GITHUB_REPO       = "GhanaHemp"
+
+# Twitter / X — set all 4 as environment variables on Railway
+TWITTER_API_KEY             = os.environ.get("TWITTER_API_KEY", "")
+TWITTER_API_SECRET          = os.environ.get("TWITTER_API_SECRET", "")
+TWITTER_ACCESS_TOKEN        = os.environ.get("TWITTER_ACCESS_TOKEN", "")
+TWITTER_ACCESS_TOKEN_SECRET = os.environ.get("TWITTER_ACCESS_TOKEN_SECRET", "")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -326,6 +342,123 @@ def parse_sections(text):
 
 
 # ═══════════════════════════════════════════════════════
+# TWITTER / X AUTO-POSTING
+# ═══════════════════════════════════════════════════════
+
+HASHTAG_SETS = {
+    "news":        "#GhanaHemp #NACOC #GhanaCannabis #Hemp #Ghana",
+    "educational": "#Hemp #CBD #GhanaHemp #HempEducation #Cannabis",
+    "blog":        "#GhanaHemp #CannabisAfrica #HempGhana #Ghana",
+    "research":    "#Hemp #Cannabis #GhanaHemp #AfricaCannabis",
+    "seo":         "#GhanaHemp #NACOC #GhanaCannabis #HempGhana",
+}
+
+TWEET_TEMPLATES = {
+    "news": [
+        "🇬🇭 BREAKING: {headline}\n\n{summary}\n\n{url}\n\n{tags}",
+        "🌿 Ghana Cannabis Update:\n\n{headline}\n\n{summary}\n\n{url}\n\n{tags}",
+        "📰 Latest from Ghana's hemp sector:\n\n{headline}\n\n{url}\n\n{tags}",
+    ],
+    "educational": [
+        "📚 Did you know? {headline}\n\n{summary}\n\nFull guide 👇\n{url}\n\n{tags}",
+        "🌿 Hemp & CBD education:\n\n{headline}\n\n{summary}\n\n{url}\n\n{tags}",
+        "Learn something new today 👇\n\n{headline}\n\n{url}\n\n{tags}",
+    ],
+    "blog": [
+        "💡 New analysis on GhanaHemp.com:\n\n{headline}\n\n{summary}\n\n{url}\n\n{tags}",
+        "🔍 Opinion: {headline}\n\n{summary}\n\nRead the full piece 👇\n{url}\n\n{tags}",
+        "We need to talk about this 👇\n\n{headline}\n\n{url}\n\n{tags}",
+    ],
+    "research": [
+        "🔬 New research article:\n\n{headline}\n\n{summary}\n\n{url}\n\n{tags}",
+        "🌍 {headline}\n\n{summary}\n\nFull article 👇\n{url}\n\n{tags}",
+    ],
+    "seo": [
+        "📋 Complete guide: {headline}\n\n{summary}\n\n{url}\n\n{tags}",
+        "Everything you need to know 👇\n\n{headline}\n\n{url}\n\n{tags}",
+        "🇬🇭 {headline}\n\n{summary}\n\n{url}\n\n{tags}",
+    ],
+}
+
+
+def get_twitter_client():
+    """Return authenticated tweepy client or None if credentials missing."""
+    if not TWEEPY_AVAILABLE:
+        return None
+    if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET]):
+        print("  ⚠️  Twitter credentials not set — skipping Twitter post")
+        return None
+    try:
+        client = tweepy.Client(
+            consumer_key=TWITTER_API_KEY,
+            consumer_secret=TWITTER_API_SECRET,
+            access_token=TWITTER_ACCESS_TOKEN,
+            access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=True
+        )
+        return client
+    except Exception as e:
+        print(f"  ⚠️  Twitter auth failed: {e}")
+        return None
+
+
+def build_tweet(mode, headline, summary, filename):
+    """Build a tweet under 280 characters."""
+    url = f"https://ghanahemp.com/{filename}"
+    tags = HASHTAG_SETS.get(mode, HASHTAG_SETS["news"])
+    templates = TWEET_TEMPLATES.get(mode, TWEET_TEMPLATES["news"])
+    template = random.choice(templates)
+
+    # Truncate summary to fit
+    summary_short = (summary[:100] + "...") if len(summary) > 100 else summary
+
+    tweet = template.format(
+        headline=headline,
+        summary=summary_short,
+        url=url,
+        tags=tags
+    )
+
+    # Hard trim to 280 chars — preserve URL and tags at end
+    if len(tweet) <= 280:
+        return tweet
+
+    # If too long, use minimal template
+    minimal = f"🌿 {headline}\n\n{url}\n\n{tags}"
+    if len(minimal) <= 280:
+        return minimal
+
+    # Last resort — just headline + url + one hashtag
+    return f"🌿 {headline[:180]}...\n\n{url}\n\n#GhanaHemp"[:280]
+
+
+def post_to_twitter(mode, headline, summary, filename):
+    """Post a tweet. Returns True on success."""
+    print("  🐦 Posting to Twitter/X (@hempghana)...")
+    client = get_twitter_client()
+    if not client:
+        return False
+
+    tweet_text = build_tweet(mode, headline, summary, filename)
+
+    try:
+        response = client.create_tweet(text=tweet_text)
+        if response.data:
+            tweet_id = response.data.get("id", "")
+            print(f"  ✅ Tweet posted: https://twitter.com/hempghana/status/{tweet_id}")
+            return True
+        else:
+            print("  ❌ Tweet failed — no response data")
+            return False
+    except tweepy.TweepyException as e:
+        print(f"  ❌ Tweet failed: {e}")
+        return False
+    except Exception as e:
+        print(f"  ❌ Tweet error: {e}")
+        return False
+
+
+# ═══════════════════════════════════════════════════════
 # MODE 1 — BREAKING NEWS
 # ═══════════════════════════════════════════════════════
 
@@ -396,6 +529,8 @@ WRITING RULES:
         time.sleep(2)
         update_news_index(filename, headline, news.get('summary',''), category)
         print(f"  Published news: {filename}")
+        time.sleep(5)
+        post_to_twitter("news", headline, news.get('summary',''), filename)
         return True
     return False
 
@@ -488,6 +623,8 @@ SECTIONS_JSON:
 
     if publish_to_github(filename, html):
         print(f"  Published research article: {filename}")
+        time.sleep(5)
+        post_to_twitter("research", angle, plan.get('ghana_relevance', angle)[:120], filename)
         return True
     return False
 
@@ -556,6 +693,8 @@ SECTIONS_JSON:
 
     if publish_to_github(filename, html):
         print(f"  Published educational: {filename}")
+        time.sleep(5)
+        post_to_twitter("educational", topic['title'], topic['brief'][:120], filename)
         return True
     return False
 
@@ -621,6 +760,8 @@ SECTIONS_JSON:
     if publish_to_github(filename, html):
         update_news_index(filename, topic['title'], topic['brief'][:150], topic['category'])
         print(f"  Published blog: {filename}")
+        time.sleep(5)
+        post_to_twitter("blog", topic['title'], topic['brief'][:120], filename)
         return True
     return False
 
@@ -690,6 +831,8 @@ SECTIONS_JSON:
 
     if publish_to_github(filename, html):
         print(f"  Published SEO guide: {filename}")
+        time.sleep(5)
+        post_to_twitter("seo", target['title'], target['brief'][:120], filename)
         return True
     return False
 

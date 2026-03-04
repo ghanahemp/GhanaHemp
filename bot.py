@@ -178,6 +178,14 @@ footer{{background:#0D0D0D;color:rgba(255,255,255,.4);padding:32px;font-family:'
 footer a{{color:rgba(255,255,255,.3);text-decoration:none;margin:0 8px;}}
 @media(max-width:600px){{.hero h1{{font-size:28px;}}.wrap{{padding:0 20px;}}}}
 </style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9XY6MSVR1K"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){{dataLayer.push(arguments);}}
+  gtag('js', new Date());
+  gtag('config', 'G-9XY6MSVR1K');
+</script>
 </head>
 <body>
 <div class="flag"><div class="fr"></div><div class="fg"></div><div class="fgr"></div></div>

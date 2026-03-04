@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "cronSchedule": "* * * * *",
+    "cronSchedule": "0 8 * * *",
     "startCommand": "python bot.py",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3

@@ -202,6 +202,9 @@ footer a{{color:rgba(255,255,255,.3);text-decoration:none;margin:0 8px;}}
   gtag('js', new Date());
   gtag('config', 'G-9XY6MSVR1K');
 </script>
+<!-- Google AdSense -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4797924476772764"
+     crossorigin="anonymous"></script>
 </head>
 <body>
 <div class="flag"><div class="fr"></div><div class="fg"></div><div class="fgr"></div></div>

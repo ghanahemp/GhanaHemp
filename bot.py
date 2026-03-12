@@ -1,6 +1,6 @@
 """
-GhanaHemp.com Auto-Publisher Bot v3 — FULL THROTTLE
-=====================================================
+GhanaHemp.com Auto-Publisher Bot v4 — FULL THROTTLE + SOCIAL
+=============================================================
 5 CONTENT MODES running daily:
 
   MODE 1 — NEWS         Breaking Ghana cannabis news, rewritten in our voice
@@ -9,41 +9,72 @@ GhanaHemp.com Auto-Publisher Bot v3 — FULL THROTTLE
   MODE 4 — BLOG         Original opinion, analysis, deep-dive in our voice
   MODE 5 — SEO GUIDE    Long-form keyword-targeted evergreen content
 
-DAILY LOGIC:
-  Every run searches Google Trends for trending cannabis/hemp terms,
-  checks what content has been published recently, and picks the
-  best combination of modes to run today.
+v4 ADDITIONS:
+  - Twitter/X auto-posting on every publish
+  - Sitemap.xml auto-update on every publish
+  - Better error logging with full tracebacks
+  - Startup diagnostics (checks all env vars + GitHub connectivity)
 
 SETUP — set these environment variables on Railway:
   ANTHROPIC_API_KEY
   GITHUB_TOKEN
-  TWITTER_API_KEY
-  TWITTER_API_SECRET
-  TWITTER_ACCESS_TOKEN
-  TWITTER_ACCESS_TOKEN_SECRET
+  TWITTER_API_KEY           (Twitter App consumer key)
+  TWITTER_API_SECRET        (Twitter App consumer secret)
+  TWITTER_ACCESS_TOKEN      (your account access token)
+  TWITTER_ACCESS_SECRET     (your account access token secret)
+
+Twitter keys are optional — if not set, social posting is skipped silently.
 """
 
-import os, json, base64, datetime, requests, time, re, random
+import os, json, base64, datetime, requests, time, re, random, traceback, hashlib, hmac
+import urllib.parse
 import anthropic
-try:
-    import tweepy
-    TWEEPY_AVAILABLE = True
-except ImportError:
-    TWEEPY_AVAILABLE = False
-    print("⚠️  tweepy not installed — Twitter posting disabled. Add tweepy to requirements.txt")
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "YOUR_KEY_HERE")
-GITHUB_TOKEN      = os.environ.get("GITHUB_TOKEN", "YOUR_TOKEN_HERE")
-GITHUB_USERNAME   = "ghanahemp"
-GITHUB_REPO       = "GhanaHemp"
+ANTHROPIC_API_KEY     = os.environ.get("ANTHROPIC_API_KEY", "")
+GITHUB_TOKEN          = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_USERNAME       = "ghanahemp"
+GITHUB_REPO           = "GhanaHemp"
 
-# Twitter / X — set all 4 as environment variables on Railway
-TWITTER_API_KEY             = os.environ.get("TWITTER_API_KEY", "")
-TWITTER_API_SECRET          = os.environ.get("TWITTER_API_SECRET", "")
-TWITTER_ACCESS_TOKEN        = os.environ.get("TWITTER_ACCESS_TOKEN", "")
-TWITTER_ACCESS_TOKEN_SECRET = os.environ.get("TWITTER_ACCESS_TOKEN_SECRET", "")
+TWITTER_API_KEY       = os.environ.get("TWITTER_API_KEY", "")
+TWITTER_API_SECRET    = os.environ.get("TWITTER_API_SECRET", "")
+TWITTER_ACCESS_TOKEN  = os.environ.get("TWITTER_ACCESS_TOKEN", "")
+TWITTER_ACCESS_SECRET = os.environ.get("TWITTER_ACCESS_SECRET", "")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+# ═══════════════════════════════════════════════════════
+# STARTUP DIAGNOSTICS
+# ═══════════════════════════════════════════════════════
+
+def run_diagnostics():
+    """Check env vars and connectivity. Prints clear pass/fail."""
+    print("\n🔍 DIAGNOSTICS")
+
+    checks = {
+        "ANTHROPIC_API_KEY": bool(ANTHROPIC_API_KEY),
+        "GITHUB_TOKEN":      bool(GITHUB_TOKEN),
+        "TWITTER_API_KEY":   bool(TWITTER_API_KEY),
+        "TWITTER_ACCESS_TOKEN": bool(TWITTER_ACCESS_TOKEN),
+    }
+    for k, ok in checks.items():
+        print(f"  {'✅' if ok else '❌'} {k}")
+
+    # Test GitHub connectivity
+    try:
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.get(f"https://api.github.com/repos/{GITHUB_USERNAME}/{GITHUB_REPO}", headers=headers, timeout=10)
+        if r.status_code == 200:
+            print(f"  ✅ GitHub repo accessible ({GITHUB_USERNAME}/{GITHUB_REPO})")
+        else:
+            print(f"  ❌ GitHub repo error {r.status_code} — check GITHUB_TOKEN and repo name")
+    except Exception as e:
+        print(f"  ❌ GitHub connection failed: {e}")
+
+    if not TWITTER_API_KEY:
+        print("  ⚠️  Twitter keys not set — social posting will be SKIPPED")
+        print("     To enable: set TWITTER_API_KEY, TWITTER_API_SECRET,")
+        print("     TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET on Railway")
+
 
 # ═══════════════════════════════════════════════════════
 # CONTENT BANKS
@@ -194,24 +225,13 @@ footer{{background:#0D0D0D;color:rgba(255,255,255,.4);padding:32px;font-family:'
 footer a{{color:rgba(255,255,255,.3);text-decoration:none;margin:0 8px;}}
 @media(max-width:600px){{.hero h1{{font-size:28px;}}.wrap{{padding:0 20px;}}}}
 </style>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-9XY6MSVR1K"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){{dataLayer.push(arguments);}}
-  gtag('js', new Date());
-  gtag('config', 'G-9XY6MSVR1K');
-</script>
-<!-- Google AdSense -->
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4797924476772764"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 <div class="flag"><div class="fr"></div><div class="fg"></div><div class="fgr"></div></div>
 <div class="topbar"><span>NACOC Licensing Portal Open — portal.ncc.gov.gh · Toll-Free: 0800 307 307</span><div><a href="index.html">Home</a><a href="ghana-news.html">Ghana News</a><a href="licensing.html">Licensing</a></div></div>
 <div class="masthead"><a href="index.html" class="sn">Ghana<span>Hemp</span>.com</a></div>
 <nav><a href="index.html">Home</a><a href="ghana-news.html">Ghana News</a><a href="licensing.html">Licensing</a><a href="business.html">Business</a><a href="policy.html">Policy</a><a href="africa.html">Africa</a><a href="world.html">World</a><a href="education.html">Education</a><a href="resources.html">Resources</a><a href="index.html#newsletter" class="cta">Newsletter</a></nav>
-<div class="hero"><div class="wrap"><div class="eyebrow">{category} — {date_str}</div><h1>{title}</h1><div class="byline">By GhanaHemp.com · Published {date_str} · <time datetime="{iso_date}">{read_time} min read</time></div></div></div>
+<div class="hero"><div class="wrap"><div class="eyebrow">{category} — {date_str}</div><h1>{title}</h1><div class="byline">GhanaHemp.com — {date_str} — {read_time} min read</div></div></div>
 <div class="body"><div class="wrap">
 {toc_html}
 {body_html}
@@ -236,7 +256,7 @@ def build_toc(sections):
 
 def get_existing_files():
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    r = requests.get(f"https://api.github.com/repos/{GITHUB_USERNAME}/{GITHUB_REPO}/contents/", headers=headers)
+    r = requests.get(f"https://api.github.com/repos/{GITHUB_USERNAME}/{GITHUB_REPO}/contents/", headers=headers, timeout=15)
     return [f['name'] for f in r.json()] if r.status_code == 200 else []
 
 
@@ -245,49 +265,229 @@ def publish_to_github(filename, html_content, commit_msg=None):
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     content_b64 = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
     date_str = datetime.datetime.now().strftime('%Y-%m-%d')
-    check = requests.get(url, headers=headers)
+    check = requests.get(url, headers=headers, timeout=15)
     payload = {
         "message": commit_msg or f"{'Update' if check.status_code == 200 else 'New'}: {filename} [{date_str}]",
         "content": content_b64, "branch": "main"
     }
     if check.status_code == 200:
         payload["sha"] = check.json()["sha"]
-    r = requests.put(url, headers=headers, json=payload)
+    r = requests.put(url, headers=headers, json=payload, timeout=15)
     if r.status_code in (200, 201):
         print(f"  ✅ https://ghanahemp.com/{filename}")
         return True
-    print(f"  ❌ GitHub error {r.status_code}: {r.text[:150]}")
+    print(f"  ❌ GitHub error {r.status_code}: {r.text[:200]}")
     return False
 
 
 def update_news_index(filename, headline, summary, category):
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{GITHUB_REPO}/contents/ghana-news.html"
-    r = requests.get(url, headers=headers)
+    r = requests.get(url, headers=headers, timeout=15)
     if r.status_code != 200:
+        print(f"  ⚠️  Could not fetch ghana-news.html (status {r.status_code})")
         return False
     data = r.json()
     current = base64.b64decode(data['content']).decode('utf-8')
     sha = data['sha']
     date_str = datetime.datetime.now().strftime('%B %d, %Y')
-    time_str = datetime.datetime.now().strftime('%H:%M GMT')
     snip = (summary[:135] + '...') if len(summary) > 135 else summary
     card = f"""
   <div class="card" style="border:2px solid var(--green);">
     <div class="ct"><div class="cti tg"></div><div class="clbl lg">{category} — NEW</div></div>
     <h3><a href="{filename}" style="text-decoration:none;color:inherit;">{headline}</a></h3>
     <p>{snip}</p>
-    <div class="src">GhanaHemp.com · {date_str} · {time_str} · <a href="{filename}">Read full article →</a></div>
+    <div class="src">GhanaHemp.com — {date_str} — <a href="{filename}">Read full article</a></div>
   </div>
 """
     marker = '<div class="grid g2">'
     if marker not in current:
+        print(f"  ⚠️  Could not find grid marker in ghana-news.html — index not updated")
         return False
     updated = current.replace(marker, marker + card, 1)
     updated_b64 = base64.b64encode(updated.encode('utf-8')).decode('utf-8')
-    r2 = requests.put(url, headers=headers, json={"message": f"Index updated: {date_str}", "content": updated_b64, "sha": sha, "branch": "main"})
-    return r2.status_code in (200, 201)
+    r2 = requests.put(url, headers=headers, json={"message": f"Index updated: {date_str}", "content": updated_b64, "sha": sha, "branch": "main"}, timeout=15)
+    if r2.status_code in (200, 201):
+        print(f"  ✅ News index updated")
+        return True
+    print(f"  ⚠️  News index update failed: {r2.status_code}")
+    return False
 
+
+# ═══════════════════════════════════════════════════════
+# SITEMAP AUTO-UPDATE
+# ═══════════════════════════════════════════════════════
+
+def update_sitemap(new_filename):
+    """Fetch sitemap.xml from GitHub, add new URL, push back."""
+    print(f"  🗺️  Updating sitemap.xml...")
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{GITHUB_REPO}/contents/sitemap.xml"
+    r = requests.get(url, headers=headers, timeout=15)
+
+    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+    new_url = f"https://ghanahemp.com/{new_filename}"
+
+    if r.status_code == 200:
+        data = r.json()
+        current = base64.b64decode(data['content']).decode('utf-8')
+        sha = data['sha']
+
+        # Don't add duplicate
+        if new_url in current:
+            print(f"  ℹ️  URL already in sitemap")
+            return True
+
+        # Insert new URL before </urlset>
+        new_entry = f"""  <url>
+    <loc>{new_url}</loc>
+    <lastmod>{today_str}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+</urlset>"""
+        updated = current.replace("</urlset>", new_entry)
+    else:
+        # Build a fresh sitemap
+        sha = None
+        updated = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://ghanahemp.com/</loc>
+    <lastmod>{today_str}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>{new_url}</loc>
+    <lastmod>{today_str}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+</urlset>"""
+
+    content_b64 = base64.b64encode(updated.encode('utf-8')).decode('utf-8')
+    payload = {"message": f"Sitemap: add {new_filename}", "content": content_b64, "branch": "main"}
+    if sha:
+        payload["sha"] = sha
+
+    r2 = requests.put(url, headers=headers, json=payload, timeout=15)
+    if r2.status_code in (200, 201):
+        print(f"  ✅ Sitemap updated")
+        return True
+    print(f"  ⚠️  Sitemap update failed: {r2.status_code}")
+    return False
+
+
+# ═══════════════════════════════════════════════════════
+# TWITTER / X AUTO-POSTING (OAuth 1.0a)
+# ═══════════════════════════════════════════════════════
+
+def _oauth1_header(method, url, params, consumer_key, consumer_secret, access_token, access_secret):
+    """Build OAuth 1.0a Authorization header manually (no extra libraries needed)."""
+    import time as _time
+    oauth_params = {
+        "oauth_consumer_key":     consumer_key,
+        "oauth_nonce":            hashlib.md5(str(_time.time()).encode()).hexdigest(),
+        "oauth_signature_method": "HMAC-SHA1",
+        "oauth_timestamp":        str(int(_time.time())),
+        "oauth_token":            access_token,
+        "oauth_version":          "1.0",
+    }
+    all_params = {**params, **oauth_params}
+    sorted_params = "&".join(f"{urllib.parse.quote(k,'')  }={urllib.parse.quote(str(v),'')}" for k, v in sorted(all_params.items()))
+    base = f"{method.upper()}&{urllib.parse.quote(url,'')}&{urllib.parse.quote(sorted_params,'')}"
+    signing_key = f"{urllib.parse.quote(consumer_secret,'')}&{urllib.parse.quote(access_secret,'')}"
+    signature = base64.b64encode(hmac.new(signing_key.encode(), base.encode(), hashlib.sha1).digest()).decode()
+    oauth_params["oauth_signature"] = signature
+    header = "OAuth " + ", ".join(f'{urllib.parse.quote(k,"")}="{urllib.parse.quote(str(v),"")}"' for k, v in sorted(oauth_params.items()))
+    return header
+
+
+def post_tweet(text):
+    """Post a tweet via Twitter API v2. Returns True on success."""
+    if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET]):
+        print("  ⚠️  Twitter keys missing — skipping tweet")
+        return False
+
+    # Truncate to 280 chars
+    if len(text) > 280:
+        text = text[:277] + "..."
+
+    api_url = "https://api.twitter.com/2/tweets"
+    payload = {"text": text}
+    auth_header = _oauth1_header(
+        "POST", api_url, {},
+        TWITTER_API_KEY, TWITTER_API_SECRET,
+        TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET
+    )
+    try:
+        r = requests.post(api_url, json=payload,
+                          headers={"Authorization": auth_header, "Content-Type": "application/json"},
+                          timeout=15)
+        if r.status_code in (200, 201):
+            tweet_id = r.json().get("data", {}).get("id", "?")
+            print(f"  🐦 Tweeted! ID: {tweet_id}")
+            return True
+        else:
+            print(f"  ❌ Tweet failed {r.status_code}: {r.text[:200]}")
+            return False
+    except Exception as e:
+        print(f"  ❌ Tweet exception: {e}")
+        return False
+
+
+def compose_tweet(title, filename, category, mode):
+    """Ask Claude Haiku to write a punchy tweet for the new article."""
+    emoji_map = {
+        "news":        "📰",
+        "research":    "🔬",
+        "educational": "📚",
+        "blog":        "✍️",
+        "seo":         "🌿",
+    }
+    emoji = emoji_map.get(mode, "🌿")
+    url = f"https://ghanahemp.com/{filename}"
+    prompt = f"""Write a punchy Twitter/X post for this new article on GhanaHemp.com.
+
+HEADLINE: {title}
+CATEGORY: {category}
+URL: {url}
+
+RULES:
+- Max 220 characters (leave room for URL)
+- Start with {emoji}
+- Ghana-focused, authoritative voice
+- Include 2-3 relevant hashtags like #GhanaHemp #NACOCGhana #HempGhana #CannabisAfrica
+- End with the URL: {url}
+- Return ONLY the tweet text, nothing else"""
+
+    try:
+        r = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return r.content[0].text.strip()
+    except Exception as e:
+        # Fallback tweet
+        return f"{emoji} New on GhanaHemp.com: {title[:100]} #GhanaHemp #NACOCGhana {url}"
+
+
+def publish_and_tweet(filename, html, headline, summary, category, mode):
+    """Publish to GitHub then tweet. Returns True if publish succeeded."""
+    ok = publish_to_github(filename, html)
+    if ok:
+        time.sleep(3)
+        tweet_text = compose_tweet(headline, filename, category, mode)
+        post_tweet(tweet_text)
+        update_sitemap(filename)
+    return ok
+
+
+# ═══════════════════════════════════════════════════════
+# UTILITIES
+# ═══════════════════════════════════════════════════════
 
 def slugify(text, max_len=55):
     s = text.lower()
@@ -295,20 +495,11 @@ def slugify(text, max_len=55):
     s = re.sub(r'\s+', '-', s.strip())
     return s[:max_len]
 
-
 def today():
-    return datetime.datetime.now().strftime('%B %d, %Y · %H:%M GMT')
+    return datetime.datetime.now().strftime('%B %d, %Y')
 
 def today_iso():
-    return datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S+00:00')
-
-def today_time():
-    """Returns human-readable timestamp with time e.g. March 4, 2026 · 08:14 GMT"""
-    return datetime.datetime.now().strftime('%B %d, %Y · %H:%M GMT')
-
-def today_short():
-    """Returns short date for news cards e.g. Mar 4, 2026"""
-    return datetime.datetime.now().strftime('%b %d, %Y')
+    return datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
 def read_time(html):
     return max(3, round(len(html.split()) / 200))
@@ -318,26 +509,8 @@ def read_time(html):
 # AI HELPERS — call Claude with web search
 # ═══════════════════════════════════════════════════════
 
-# ═══════════════════════════════════════════════════════
-# SPEND GUARD — prevents runaway costs
-# ═══════════════════════════════════════════════════════
-_api_calls_today = 0
-MAX_API_CALLS_PER_RUN = 8  # hard limit — prevents runaway cost
-
-def check_spend_limit():
-    """Returns True if we can make another API call."""
-    global _api_calls_today
-    _api_calls_today += 1
-    if _api_calls_today > MAX_API_CALLS_PER_RUN:
-        print(f"  ⚠️  Spend limit reached ({MAX_API_CALLS_PER_RUN} calls). Stopping to save credits.")
-        return False
-    return True
-
-
-def ai_search_and_write(prompt, max_tokens=2000, use_search=True):
+def ai_search_and_write(prompt, max_tokens=4000, use_search=True):
     """Call Claude Sonnet with optional web search. Returns full text."""
-    if not check_spend_limit(): return ""
-    time.sleep(15)  # avoid rate limiting — 15s gap before Sonnet calls
     tools = [{"type": "web_search_20250305", "name": "web_search"}] if use_search else []
     kwargs = dict(
         model="claude-sonnet-4-20250514",
@@ -350,10 +523,8 @@ def ai_search_and_write(prompt, max_tokens=2000, use_search=True):
     return "".join(b.text for b in r.content if hasattr(b, 'text'))
 
 
-def ai_write(prompt, max_tokens=2000):
+def ai_write(prompt, max_tokens=3000):
     """Call Claude Haiku — fast writer, no search."""
-    if not check_spend_limit(): return ""
-    time.sleep(5)  # avoid rate limiting
     r = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=max_tokens,
@@ -374,123 +545,6 @@ def parse_sections(text):
 
 
 # ═══════════════════════════════════════════════════════
-# TWITTER / X AUTO-POSTING
-# ═══════════════════════════════════════════════════════
-
-HASHTAG_SETS = {
-    "news":        "#GhanaHemp #NACOC #GhanaCannabis #Hemp #Ghana",
-    "educational": "#Hemp #CBD #GhanaHemp #HempEducation #Cannabis",
-    "blog":        "#GhanaHemp #CannabisAfrica #HempGhana #Ghana",
-    "research":    "#Hemp #Cannabis #GhanaHemp #AfricaCannabis",
-    "seo":         "#GhanaHemp #NACOC #GhanaCannabis #HempGhana",
-}
-
-TWEET_TEMPLATES = {
-    "news": [
-        "🇬🇭 BREAKING: {headline}\n\n{summary}\n\n{url}\n\n{tags}",
-        "🌿 Ghana Cannabis Update:\n\n{headline}\n\n{summary}\n\n{url}\n\n{tags}",
-        "📰 Latest from Ghana's hemp sector:\n\n{headline}\n\n{url}\n\n{tags}",
-    ],
-    "educational": [
-        "📚 Did you know? {headline}\n\n{summary}\n\nFull guide 👇\n{url}\n\n{tags}",
-        "🌿 Hemp & CBD education:\n\n{headline}\n\n{summary}\n\n{url}\n\n{tags}",
-        "Learn something new today 👇\n\n{headline}\n\n{url}\n\n{tags}",
-    ],
-    "blog": [
-        "💡 New analysis on GhanaHemp.com:\n\n{headline}\n\n{summary}\n\n{url}\n\n{tags}",
-        "🔍 Opinion: {headline}\n\n{summary}\n\nRead the full piece 👇\n{url}\n\n{tags}",
-        "We need to talk about this 👇\n\n{headline}\n\n{url}\n\n{tags}",
-    ],
-    "research": [
-        "🔬 New research article:\n\n{headline}\n\n{summary}\n\n{url}\n\n{tags}",
-        "🌍 {headline}\n\n{summary}\n\nFull article 👇\n{url}\n\n{tags}",
-    ],
-    "seo": [
-        "📋 Complete guide: {headline}\n\n{summary}\n\n{url}\n\n{tags}",
-        "Everything you need to know 👇\n\n{headline}\n\n{url}\n\n{tags}",
-        "🇬🇭 {headline}\n\n{summary}\n\n{url}\n\n{tags}",
-    ],
-}
-
-
-def get_twitter_client():
-    """Return authenticated tweepy client or None if credentials missing."""
-    if not TWEEPY_AVAILABLE:
-        return None
-    if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET]):
-        print("  ⚠️  Twitter credentials not set — skipping Twitter post")
-        return None
-    try:
-        client = tweepy.Client(
-            consumer_key=TWITTER_API_KEY,
-            consumer_secret=TWITTER_API_SECRET,
-            access_token=TWITTER_ACCESS_TOKEN,
-            access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=True
-        )
-        return client
-    except Exception as e:
-        print(f"  ⚠️  Twitter auth failed: {e}")
-        return None
-
-
-def build_tweet(mode, headline, summary, filename):
-    """Build a tweet under 280 characters."""
-    url = f"https://ghanahemp.com/{filename}"
-    tags = HASHTAG_SETS.get(mode, HASHTAG_SETS["news"])
-    templates = TWEET_TEMPLATES.get(mode, TWEET_TEMPLATES["news"])
-    template = random.choice(templates)
-
-    # Truncate summary to fit
-    summary_short = (summary[:100] + "...") if len(summary) > 100 else summary
-
-    tweet = template.format(
-        headline=headline,
-        summary=summary_short,
-        url=url,
-        tags=tags
-    )
-
-    # Hard trim to 280 chars — preserve URL and tags at end
-    if len(tweet) <= 280:
-        return tweet
-
-    # If too long, use minimal template
-    minimal = f"🌿 {headline}\n\n{url}\n\n{tags}"
-    if len(minimal) <= 280:
-        return minimal
-
-    # Last resort — just headline + url + one hashtag
-    return f"🌿 {headline[:180]}...\n\n{url}\n\n#GhanaHemp"[:280]
-
-
-def post_to_twitter(mode, headline, summary, filename):
-    """Post a tweet. Returns True on success."""
-    print("  🐦 Posting to Twitter/X (@hempghana)...")
-    client = get_twitter_client()
-    if not client:
-        return False
-
-    tweet_text = build_tweet(mode, headline, summary, filename)
-
-    try:
-        response = client.create_tweet(text=tweet_text)
-        if response.data:
-            tweet_id = response.data.get("id", "")
-            print(f"  ✅ Tweet posted: https://twitter.com/hempghana/status/{tweet_id}")
-            return True
-        else:
-            print("  ❌ Tweet failed — no response data")
-            return False
-    except tweepy.TweepyException as e:
-        print(f"  ❌ Tweet failed: {e}")
-        return False
-    except Exception as e:
-        print(f"  ❌ Tweet error: {e}")
-        return False
-
-
-# ═══════════════════════════════════════════════════════
 # MODE 1 — BREAKING NEWS
 # ═══════════════════════════════════════════════════════
 
@@ -498,12 +552,7 @@ def run_news_mode():
     print("\n📡 MODE 1: NEWS")
     raw = ai_search_and_write("""Search for the LATEST Ghana cannabis, hemp, or NACOC news from the past 7 days.
 
-Search these sources for Ghana cannabis/hemp news:
-Ghana sources: ghanaweb.com, modernghana.com, myjoyonline.com, citinewsroom.com, 3news.com, graphic.com.gh, pulse.com.gh, dailyguidenetwork.com, businessghana.com, thebftonline.com, ghananewsagency.org, peacefmonline.com, starrfm.com.gh, ghanabusinessnews.com, thecitizen.com.gh, accramail.com, mynewsgh.com, adomonline.com, kasapafmonline.com, asaaseradio.com
-Africa sources: theafricareport.com, africanews.com, businessinsider.africa, africanbusinessmagazine.com, premiumtimesng.com, businessdayonline.com, dailymaverick.co.za, theeastafrican.co.ke, africafeeds.com
-International: reuters.com, bloomberg.com, cannabisbusinesstimes.com, mjbizdaily.com, cannabisindustryjournal.com, hempindustrydaily.com, leafly.com, forbes.com/cannabis
-
-Search queries: "Ghana cannabis 2026" OR "NACOC cannabis Ghana" OR "Ghana hemp licence" OR "Ghana cannabis NACOC" OR "Ghana industrial hemp"
+Search: "Ghana cannabis 2026" AND "NACOC cannabis Ghana" AND check: modernghana.com, myjoyonline.com, citinewsroom.com, 3news.com, graphic.com.gh, theafricareport.com
 
 Find the single most important, most recent story published in the last 7 days.
 
@@ -516,7 +565,7 @@ Return ONLY this JSON (no other text):
   "source_name": "publication name",
   "category": "Policy or Licensing or Business or Legal or Health or Industry",
   "date": "date"
-}""", max_tokens=800)
+}""", max_tokens=1000)
 
     try:
         m = re.search(r'\{.*?\}', raw, re.DOTALL)
@@ -549,7 +598,7 @@ WRITING RULES:
 - Include context: reference NACOC, L.I. 2475, Act 1100, portal.ncc.gov.gh where relevant
 - End with a "What This Means" section analysing the implications for Ghana
 - Reference the source but write the article in our own original voice
-- Return ONLY the HTML body, nothing else""", max_tokens=2000)
+- Return ONLY the HTML body, nothing else""", max_tokens=2500)
 
     filename = f"article-{datetime.datetime.now().strftime('%Y-%m-%d')}-{slugify(headline)}.html"
     sources_html = f'<a href="{news.get("source_url","")}" target="_blank">{news.get("source_name","")}</a> · NACOC (ncc.gov.gh) · Ministry of Interior (mint.gov.gh)'
@@ -562,12 +611,10 @@ WRITING RULES:
         article_type="NewsArticle"
     )
 
-    if publish_to_github(filename, html):
+    if publish_and_tweet(filename, html, headline, news.get('summary',''), category, "news"):
         time.sleep(2)
         update_news_index(filename, headline, news.get('summary',''), category)
-        print(f"  Published news: {filename}")
-        time.sleep(5)
-        post_to_twitter("news", headline, news.get('summary',''), filename)
+        print(f"  ✅ Published news: {filename}")
         return True
     return False
 
@@ -579,7 +626,6 @@ WRITING RULES:
 def run_research_mode(existing_files):
     print("\n🔬 MODE 2: RESEARCH → ORIGINAL ARTICLE")
 
-    # Step 1: Find what's trending + pick a research topic
     trend_query = random.choice(TRENDING_SEARCH_TOPICS)
     print(f"  Research topic: {trend_query}")
 
@@ -641,7 +687,7 @@ THIS IS ORIGINAL JOURNALISM — NOT A SUMMARY:
 - End with a clear takeaway
 - Return HTML body FIRST, then on a new line write:
 SECTIONS_JSON:
-["Section 1 Title", "Section 2 Title", "Section 3 Title", "Section 4 Title"]""", max_tokens=2000)
+["Section 1 Title", "Section 2 Title", "Section 3 Title", "Section 4 Title"]""", max_tokens=3500)
 
     body, sections = parse_sections(raw2)
     toc = build_toc(sections)
@@ -658,10 +704,8 @@ SECTIONS_JSON:
         toc_html=toc
     )
 
-    if publish_to_github(filename, html):
-        print(f"  Published research article: {filename}")
-        time.sleep(5)
-        post_to_twitter("research", angle, plan.get('ghana_relevance', angle)[:120], filename)
+    if publish_and_tweet(filename, html, angle, f"{angle}. Original research from GhanaHemp.com.", category, "research"):
+        print(f"  ✅ Published research article: {filename}")
         return True
     return False
 
@@ -673,7 +717,6 @@ SECTIONS_JSON:
 def run_educational_mode(existing_files):
     print("\n📚 MODE 3: EDUCATIONAL")
 
-    # Find next unwritten educational topic
     topic = None
     for t in EDUCATIONAL_TOPICS:
         fname = f"learn-{t['slug']}.html"
@@ -683,7 +726,6 @@ def run_educational_mode(existing_files):
             break
 
     if not topic:
-        # All written — pick a random new one based on a trending term
         topic = random.choice(EDUCATIONAL_TOPICS)
         filename = f"learn-{topic['slug']}-{datetime.datetime.now().strftime('%Y%m%d')}.html"
 
@@ -713,7 +755,7 @@ WRITING RULES:
 
 Return HTML body FIRST then:
 SECTIONS_JSON:
-["Section 1", "Section 2", "Section 3", "Section 4", "Section 5"]""", max_tokens=2000)
+["Section 1", "Section 2", "Section 3", "Section 4", "Section 5"]""", max_tokens=4000)
 
     body, sections = parse_sections(raw)
     toc = build_toc(sections)
@@ -728,10 +770,8 @@ SECTIONS_JSON:
         toc_html=toc
     )
 
-    if publish_to_github(filename, html):
-        print(f"  Published educational: {filename}")
-        time.sleep(5)
-        post_to_twitter("educational", topic['title'], topic['brief'][:120], filename)
+    if publish_and_tweet(filename, html, topic['title'], topic['brief'][:150], topic['category'], "educational"):
+        print(f"  ✅ Published educational: {filename}")
         return True
     return False
 
@@ -743,7 +783,6 @@ SECTIONS_JSON:
 def run_blog_mode(existing_files):
     print("\n✍️  MODE 4: ORIGINAL BLOG")
 
-    # Find next unwritten blog
     topic = None
     for t in BLOG_TOPICS:
         fname = f"blog-{t['slug']}.html"
@@ -779,7 +818,7 @@ THIS IS ORIGINAL OPINION/ANALYSIS — not a news report:
 
 Return HTML body FIRST then:
 SECTIONS_JSON:
-["Section 1", "Section 2", "Section 3", "Section 4"]""", max_tokens=2000)
+["Section 1", "Section 2", "Section 3", "Section 4"]""", max_tokens=3500)
 
     body, sections = parse_sections(raw)
     toc = build_toc(sections)
@@ -794,11 +833,10 @@ SECTIONS_JSON:
         toc_html=toc
     )
 
-    if publish_to_github(filename, html):
+    if publish_and_tweet(filename, html, topic['title'], topic['brief'][:150], topic['category'], "blog"):
+        time.sleep(2)
         update_news_index(filename, topic['title'], topic['brief'][:150], topic['category'])
-        print(f"  Published blog: {filename}")
-        time.sleep(5)
-        post_to_twitter("blog", topic['title'], topic['brief'][:120], filename)
+        print(f"  ✅ Published blog: {filename}")
         return True
     return False
 
@@ -810,7 +848,6 @@ SECTIONS_JSON:
 def run_seo_mode(existing_files):
     print("\n🎯 MODE 5: SEO GUIDE")
 
-    # Find next unwritten SEO guide
     target = None
     for t in SEO_GUIDES:
         fname = f"guide-{t['slug']}.html"
@@ -850,7 +887,7 @@ HTML TAGS — use ONLY:
 
 Return HTML body FIRST then:
 SECTIONS_JSON:
-["Section 1", "Section 2", "Section 3", "Section 4", "FAQ"]""", max_tokens=2000)
+["Section 1", "Section 2", "Section 3", "Section 4", "FAQ"]""", max_tokens=4500)
 
     body, sections = parse_sections(raw)
     toc = build_toc(sections)
@@ -866,42 +903,10 @@ SECTIONS_JSON:
         toc_html=toc
     )
 
-    if publish_to_github(filename, html):
-        print(f"  Published SEO guide: {filename}")
-        time.sleep(5)
-        post_to_twitter("seo", target['title'], target['brief'][:120], filename)
+    if publish_and_tweet(filename, html, target['title'], target['brief'][:150], target['category'], "seo"):
+        print(f"  ✅ Published SEO guide: {filename}")
         return True
     return False
-
-
-# ═══════════════════════════════════════════════════════
-# TRENDING TOPIC DETECTOR
-# ═══════════════════════════════════════════════════════
-
-def get_trending_topic():
-    """Ask Claude what cannabis topics are trending today."""
-    print("\n📈 Checking trending topics...")
-    raw = ai_search_and_write("""Search Google Trends and recent news for what cannabis, hemp, and CBD topics people are searching for RIGHT NOW in 2026.
-
-Search for:
-1. Trending cannabis/hemp news globally this week
-2. Trending CBD searches this week
-3. What hemp/cannabis questions are people asking on Reddit and forums
-
-Return ONLY a JSON array of 5 trending topic strings, like:
-["topic 1", "topic 2", "topic 3", "topic 4", "topic 5"]
-
-Return ONLY the JSON array, nothing else.""", max_tokens=800)
-
-    try:
-        m = re.search(r'\[.*?\]', raw, re.DOTALL)
-        if m:
-            topics = json.loads(m.group())
-            print(f"  Trending: {topics[:3]}")
-            return topics
-    except:
-        pass
-    return TRENDING_SEARCH_TOPICS[:5]
 
 
 # ═══════════════════════════════════════════════════════
@@ -911,20 +916,13 @@ Return ONLY the JSON array, nothing else.""", max_tokens=800)
 def get_todays_modes():
     """Based on day of week, return which modes to run today."""
     dow = datetime.datetime.now().weekday()  # 0=Mon, 6=Sun
-    # Monday
     if dow == 0:   return ["news", "educational"]
-    # Tuesday
     elif dow == 1: return ["research", "blog"]
-    # Wednesday
     elif dow == 2: return ["news", "seo"]
-    # Thursday
     elif dow == 3: return ["educational", "research"]
-    # Friday
     elif dow == 4: return ["news", "blog"]
-    # Saturday
     elif dow == 5: return ["research", "seo"]
-    # Sunday
-    else:           return ["seo", "educational"]
+    else:          return ["seo", "educational"]
 
 
 # ═══════════════════════════════════════════════════════
@@ -933,12 +931,14 @@ def get_todays_modes():
 
 def run():
     print("=" * 60)
-    print("🌿 GhanaHemp.com Auto-Publisher v3 — FULL THROTTLE")
+    print("🌿 GhanaHemp.com Auto-Publisher v4 — FULL THROTTLE + SOCIAL")
     print(f"⏰ {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S %A')}")
     print("=" * 60)
 
+    run_diagnostics()
+
     existing = get_existing_files()
-    print(f"📁 {len(existing)} files already in repo")
+    print(f"\n📁 {len(existing)} files already in repo")
 
     modes = get_todays_modes()
     print(f"📅 Today's content modes: {modes}")
@@ -953,7 +953,6 @@ def run():
                 time.sleep(45)
 
             elif mode == "research":
-                # Update existing list after potential news publish
                 existing = get_existing_files()
                 ok = run_research_mode(existing)
                 results.append(("RESEARCH", ok))
@@ -978,24 +977,19 @@ def run():
                 time.sleep(30)
 
         except Exception as e:
-            print(f"  ⚠️  {mode} mode failed: {e}")
+            print(f"  ⚠️  {mode} mode FAILED:")
+            traceback.print_exc()
             results.append((mode.upper(), False))
             time.sleep(10)
 
-    # If neither content piece published, always fall back to educational
+    # Fallback if everything failed
     if not any(ok for _, ok in results):
         print("\n⚠️  All modes failed — fallback to educational")
         existing = get_existing_files()
         run_educational_mode(existing)
 
-    # Always update sitemap at end of run
-    try:
-        update_sitemap()
-    except Exception as e:
-        print(f"  ⚠️  Sitemap update failed: {e}")
-
     print("\n" + "=" * 60)
-    print("📊 RESULTS:")
+    print("📊 FINAL RESULTS:")
     for mode, ok in results:
         print(f"  {'✅' if ok else '❌'} {mode}")
     print("=" * 60)
